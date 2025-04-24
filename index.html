@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bambarido</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #70c5ce;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            overflow: hidden;
+            background-color: #70c5ce;
+            border: 3px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            z-index: 10;
+            text-align: center;
+        }
+        
+        #game-over-screen {
+            display: none;
+        }
+        
+        h1 {
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px #000;
+            color: #f8d030;
+        }
+        
+        .game-text {
+            font-size: 18px;
+            margin: 10px 0;
+            text-shadow: 1px 1px 2px #000;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 20px;
+            background-color: #f8d030;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+        }
+        
+        button:hover {
+            background-color: #f0a020;
+            transform: scale(1.05);
+        }
+        
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: white;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 5;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            text-shadow: 1px 1px 2px #000;
+            font-size: 16px;
+        }
+        
+        #bambarido-img {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            z-index: 20;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="400" height="600"></canvas>
+        
+        <!-- Using the image from the provided URL -->
+        <img id="bambarido-img" src="https://i.ibb.co/WNYwWwMF/flappy-bambarido.png" alt="Flappy Bambarido">
+        
+        <div id="score-display">Score: 0</div>
+        
+        <div id="start-screen">
+            <h1>Flappy Bambarido</h1>
+            <div class="game-text">Help Bambarido fly through the jungle!</div>
+            <div class="game-text">Avoid the vines and score points</div>
+            <button id="start-button">Start Game</button>
+            <div id="instructions">Press SPACE or click to jump</div>
+        </div>
+        
+        <div id="game-over-screen">
+            <h1>Game Over!</h1>
+            <div class="game-text" id="final-score">Score: 0</div>
+            <div class="game-text" id="high-score">High Score: 0</div>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const scoreDisplay = document.getElementById('score-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const bambaridoImg = document.getElementById('bambarido-img');
+        
+        // Game variables
+        let gameRunning = false;
+        let score = 0;
+        let highScore = 0;
+        let gravity = 0.4;
+        let speed = 2;
+        
+        // Bambarido character
+        const bambarido = {
+            x: 100,
+            y: canvas.height / 2,
+            width: 60,
+            height: 60,
+            velocity: 0,
+            jump: -7,
+            
+            draw: function() {
+                // Position the image element instead of drawing
+                bambaridoImg.style.display = 'block';
+                bambaridoImg.style.left = (this.x - this.width/2) + 'px';
+                bambaridoImg.style.top = (this.y - this.height/2) + 'px';
+            },
+            
+            update: function() {
+                this.velocity += gravity;
+                this.y += this.velocity;
+                
+                // Prevent going above the canvas
+                if (this.y < this.height / 2) {
+                    this.y = this.height / 2;
+                    this.velocity = 0;
+                }
+                
+                // Check if hit the ground
+                if (this.y > canvas.height - this.height / 2) {
+                    this.y = canvas.height - this.height / 2;
+                    gameOver();
+                }
+            },
+            
+            flap: function() {
+                this.velocity = this.jump;
+            }
+        };
+        
+        // Vines (replacing pipes for jungle theme)
+        const vines = {
+            width: 60,
+            gap: 150,
+            list: [],
+            
+            draw: function() {
+                ctx.fillStyle = '#4a7c59';
+                for (let vine of this.list) {
+                    // Top vine
+                    ctx.fillRect(vine.x, 0, this.width, vine.topHeight);
+                    
+                    // Bottom vine
+                    ctx.fillRect(vine.x, vine.topHeight + this.gap, this.width, canvas.height - vine.topHeight - this.gap);
+                    
+                    // Vine details
+                    ctx.fillStyle = '#3a5c40';
+                    // Draw vine leaves/curves
+                    for (let i = 0; i < vine.topHeight; i += 20) {
+                        ctx.beginPath();
+                        ctx.arc(vine.x + this.width/2, i, 15, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    for (let i = vine.topHeight + this.gap; i < canvas.height; i += 20) {
+                        ctx.beginPath();
+                        ctx.arc(vine.x + this.width/2, i, 15, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                ctx.fillStyle = '#4a7c59';
+            },
+            
+            update: function() {
+                // Add new vines
+                if (this.list.length === 0 || this.list[this.list.length - 1].x < canvas.width - 200) {
+                    const topHeight = Math.floor(Math.random() * (canvas.height - this.gap - 100)) + 50;
+                    this.list.push({
+                        x: canvas.width,
+                        topHeight: topHeight,
+                        passed: false
+                    });
+                }
+                
+                // Move vines
+                for (let i = 0; i < this.list.length; i++) {
+                    this.list[i].x -= speed;
+                    
+                    // Check if passed the vine
+                    if (!this.list[i].passed && this.list[i].x + this.width < bambarido.x) {
+                        this.list[i].passed = true;
+                        score++;
+                        scoreDisplay.textContent = `Score: ${score}`;
+                    }
+                    
+                    // Check collision
+                    if (
+                        bambarido.x + bambarido.width/2 > this.list[i].x && 
+                        bambarido.x - bambarido.width/2 < this.list[i].x + this.width &&
+                        (bambarido.y - bambarido.height/2 < this.list[i].topHeight || 
+                         bambarido.y + bambarido.height/2 > this.list[i].topHeight + this.gap)
+                    ) {
+                        gameOver();
+                    }
+                }
+                
+                // Remove off-screen vines
+                if (this.list.length > 0 && this.list[0].x + this.width < 0) {
+                    this.list.shift();
+                }
+            }
+        };
+        
+        // Jungle background
+        const background = {
+            clouds: [],
+            trees: [],
+            
+            init: function() {
+                for (let i = 0; i < 5; i++) {
+                    this.clouds.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * 200,
+                        width: 60 + Math.random() * 40,
+                        speed: 0.5 + Math.random() * 0.5
+                    });
+                }
+                
+                // Add some background trees
+                for (let i = 0; i < 3; i++) {
+                    this.trees.push({
+                        x: Math.random() * canvas.width,
+                        width: 40 + Math.random() * 30,
+                        height: 150 + Math.random() * 100,
+                        speed: 0.2 + Math.random() * 0.3
+                    });
+                }
+            },
+            
+            draw: function() {
+                // Sky gradient
+                const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                skyGradient.addColorStop(0, '#87CEEB');
+                skyGradient.addColorStop(1, '#1E90FF');
+                ctx.fillStyle = skyGradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Distant trees
+                for (let tree of this.trees) {
+                    // Tree trunk
+                    ctx.fillStyle = '#5e2c04';
+                    ctx.fillRect(tree.x, canvas.height - tree.height - 20, tree.width/3, tree.height);
+                    
+                    // Leaves
+                    ctx.fillStyle = '#3a5c40';
+                    ctx.beginPath();
+                    ctx.arc(tree.x + tree.width/6, canvas.height - tree.height - 20, tree.width/2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Clouds
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                for (let cloud of this.clouds) {
+                    ctx.beginPath();
+                    ctx.arc(cloud.x, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width / 3, cloud.y - cloud.width / 6, cloud.width / 4, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width / 2, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+                    ctx.arc(cloud.x + cloud.width / 3, cloud.y + cloud.width / 6, cloud.width / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Ground
+                ctx.fillStyle = '#4a7c59';
+                ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+                
+                // Ground details
+                ctx.fillStyle = '#3a5c40';
+                for (let i = 0; i < 10; i++) {
+                    const x = (i * 40) % canvas.width;
+                    ctx.beginPath();
+                    ctx.arc(x, canvas.height - 20, 5, 0, Math.PI);
+                    ctx.fill();
+                }
+            },
+            
+            update: function() {
+                for (let cloud of this.clouds) {
+                    cloud.x -= cloud.speed;
+                    if (cloud.x + cloud.width < 0) {
+                        cloud.x = canvas.width;
+                        cloud.y = Math.random() * 200;
+                    }
+                }
+                
+                for (let tree of this.trees) {
+                    tree.x -= tree.speed;
+                    if (tree.x + tree.width < 0) {
+                        tree.x = canvas.width;
+                        tree.height = 150 + Math.random() * 100;
+                    }
+                }
+            }
+        };
+        
+        // Game functions
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            speed = 2;
+            bambarido.y = canvas.height / 2;
+            bambarido.velocity = 0;
+            vines.list = [];
+            scoreDisplay.textContent = `Score: ${score}`;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            bambaridoImg.style.display = 'block';
+            animate();
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            finalScoreDisplay.textContent = `Score: ${score}`;
+            bambaridoImg.style.display = 'none';
+            
+            if (score > highScore) {
+                highScore = score;
+                highScoreDisplay.textContent = `High Score: ${highScore}`;
+            } else {
+                highScoreDisplay.textContent = `High Score: ${highScore}`;
+            }
+            
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        function animate() {
+            if (!gameRunning) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            background.draw();
+            background.update();
+            
+            vines.draw();
+            vines.update();
+            
+            bambarido.draw();
+            bambarido.update();
+            
+            // Increase difficulty
+            if (score > 0 && score % 5 === 0) {
+                speed = 2 + Math.floor(score / 5) * 0.2;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                if (!gameRunning && startScreen.style.display === 'flex') {
+                    startGame();
+                } else if (gameRunning) {
+                    bambarido.flap();
+                } else if (!gameRunning && gameOverScreen.style.display === 'flex') {
+                    startGame();
+                }
+            }
+        });
+        
+        canvas.addEventListener('click', () => {
+            if (gameRunning) {
+                bambarido.flap();
+            } else if (startScreen.style.display === 'flex') {
+                startGame();
+            } else if (gameOverScreen.style.display === 'flex') {
+                startGame();
+            }
+        });
+        
+        // Initialize
+        background.init();
+        
+        // Preload the image
+        window.onload = function() {
+            // Image is already in the HTML, so we just need to hide it initially
+            bambaridoImg.style.display = 'none';
+        };
+    </script>
+</body>
+</html>
